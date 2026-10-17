@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reacción MMA</title>
+    <!-- Conecta el archivo de configuración para la App (PWA) -->
+    <link rel="manifest" href="manifest.json">
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            text-align: center; 
+            background: #121212; 
+            color: white; 
+            padding: 20px; 
+            transition: background 0.1s; 
+        }
+        /* Destello visual agresivo cuando suena el pitido */
+        .flash { background: #ff2a2a !important; }
+        #clock { 
+            font-size: 5em; 
+            margin: 20px 0; 
+            font-family: monospace; 
+            font-weight: bold;
+            color: #ffffff;
+        }
+        .stats { font-size: 1.5em; margin-bottom: 30px; color: #aaaaaa; }
+        button { 
+            font-size: 1.2em; 
+            padding: 12px 24px; 
+            margin: 5px; 
+            cursor: pointer; 
+            background: #333;
+            color: white;
+            border: 2px solid #555;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+        button:hover { background: #555; }
+        #startBtn { background: #28a745; border-color: #28a745; }
+        #startBtn:hover { background: #218838; }
+        .controls { margin-top: 25px; font-size: 1.1em; }
+        input[type="number"] { width: 60px; font-size: 1em; padding: 5px; text-align: center; }
+        input[type="range"] { vertical-align: middle; }
+    </style>
+</head>
+<body>
+    <h1>Asalto de Reacción</h1>
+    <div id="clock">03:00</div>
+    <div class="stats">Patadas lanzadas: <strong id="counter" style="color: white;">0</strong></div>
+    
+    <div class="controls">
+        <button id="startBtn">Iniciar</button>
+        <button id="pauseBtn">Pausar</button>
+        <button id="resetBtn">Reiniciar</button>
+    </div>
+    
+    <div class="controls">
+        <label>Min (seg): <input type="number" id="minInt" value="2" min="1"></label>
+        &nbsp;&nbsp;
+        <label>Max (seg): <input type="number" id="maxInt" value="6" min="2"></label>
+    </div>
+    
+    <div class="controls">
+        <label>Volumen: <input type="range" id="vol" min="0" max="1" step="0.1" value="1"></label>
+        <br><br>
+        <button id="testBtn">Probar Chicharra</button>
+    </div>
+
+    <script>
+        // Registro del Service Worker para funcionamiento sin conexión
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                .then(reg => console.log('Service Worker registrado con éxito', reg))
+                .catch(err => console.log('Error al registrar Service Worker', err));
+            });
+        }
+
+        // --- Lógica del Temporizador ---
+        let timeTotal = 180; // 3 minutos
+        let timeRemaining = timeTotal;
+        let kicks = 0;
+        let timerInterval;
+        let beepTimeout;
+        let isRunning = false;
+        
+        let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const clockEl = document.getElementById('clock');
+        const countEl = document.getElementById('counter');
+
+        function formatTime(s) {
+            const mins = Math.floor(s / 60).toString().padStart(2, '0');
+            const secs = (s % 60).toString().padStart(2, '0');
+            return `${mins}:${secs}`;
+        }
+
+        function playBeep() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const vol = parseFloat(document.getElementById('vol').value);
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'square'; 
+            osc.frequency.value = 800; // Sonido de chicharra penetrante
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            gain.gain.value = vol;
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.15); // Duración de 150ms
+
+            document.body.classList.add('flash');
+            setTimeout(() => document.body.classList.remove('flash'), 100);
+        }
+
+        function scheduleNextBeep() {
+            if (!isRunning || timeRemaining <= 0) return;
+            
+            const minI = parseInt(document.getElementById('minInt').value) * 1000;
+            const maxI = parseInt(document.getElementById('maxInt').value) * 1000;
+            const delay = Math.random() * (maxI - minI) + minI;
+
+            beepTimeout = setTimeout(() => {
+                playBeep();
+                kicks++;
+                countEl.innerText = kicks;
+                scheduleNextBeep();
+            }, delay);
+        }
+
+        document.getElementById('startBtn').onclick = () => {
+            if (isRunning) return;
+            isRunning = true;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            timerInterval = setInterval(() => {
+                timeRemaining--;
+                clockEl.innerText = formatTime(timeRemaining);
+                
+                if (timeRemaining <= 0) {
+                    clearInterval(timerInterval);
+                    clearTimeout(beepTimeout);
+                    isRunning = false;
+                    setTimeout(() => alert('¡Asalto terminado!'), 200);
+                }
+            }, 1000);
+            
+            scheduleNextBeep();
+        };
+
+        document.getElementById('pauseBtn').onclick = () => {
+            isRunning = false;
+            clearInterval(timerInterval);
+            clearTimeout(beepTimeout);
+        };
+
+        document.getElementById('resetBtn').onclick = () => {
+            isRunning = false;
+            clearInterval(timerInterval);
+            clearTimeout(beepTimeout);
+            timeRemaining = timeTotal;
+            kicks = 0;
+            clockEl.innerText = formatTime(timeRemaining);
+            countEl.innerText = kicks;
+        };
+
+        document.getElementById('testBtn').onclick = () => {
+            playBeep();
+        };
+    </script>
+</body>
+</html>
